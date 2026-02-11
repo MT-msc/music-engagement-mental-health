@@ -1,0 +1,167 @@
+---
+title: "STAT 325 Project"
+author: "Tina Ma"
+output: github_document
+date: "2024-12-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(broom)
+```
+
+```{r}
+data <- read.csv("mxmh_survey_results.csv")
+relevant_columns <- c("Age", "Fav.genre", "Hours.per.day", "Instrumentalist", "Composer", 
+                      "Music.effects", "Anxiety", "Depression", "Insomnia", "OCD")
+cleaned_data <- data %>%
+  select(all_of(relevant_columns)) %>%
+  drop_na()
+cleaned_data <- cleaned_data %>%
+  mutate(
+    Instrumentalist = ifelse(Instrumentalist == "Yes", 1, 0),
+    Composer = ifelse(Composer == "Yes", 1, 0),
+    Music.effects = factor(Music.effects, levels = unique(Music.effects))
+  )
+```
+
+```{r}
+heatmap_data <- cleaned_data %>%
+  group_by(Fav.genre) %>%
+  summarize(
+    Mean_Anxiety = mean(Anxiety),
+    Mean_Depression = mean(Depression),
+    Mean_Insomnia = mean(Insomnia),
+    Mean_OCD = mean(OCD)
+  ) %>%
+  pivot_longer(cols = starts_with("Mean"), names_to = "Mental_Health", values_to = "Mean_Score")
+#Heatmap
+ggplot(heatmap_data, aes(x = Mental_Health, y = Fav.genre, fill = Mean_Score)) +
+  geom_tile() +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(
+    title = "Heatmap of Mental Health Scores by Favorite Genre",
+    x = "Mental Health Outcome",
+    y = "Favorite Genre",
+    fill = "Mean Score"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+model_anxiety <- lm(Anxiety ~ Fav.genre + Age + Hours.per.day, data = cleaned_data)
+summary(model_anxiety)
+regression_table <- tidy(model_anxiety)
+knitr::kable(regression_table, caption = "Regression Estimates for Anxiety")
+```
+
+```{r}
+# Reduced model
+reduced_model <- lm(Anxiety ~ Fav.genre + Age, data = cleaned_data)
+summary(reduced_model)
+AIC(model_anxiety, reduced_model)
+```
+
+```{r}
+model_anxiety <- lm(Anxiety ~ Age + Hours.per.day + Instrumentalist + Composer + 
+                    Music.effects, data = cleaned_data)
+summary(model_anxiety)
+```
+
+```{r}
+regression_table <- tidy(model_anxiety)
+knitr::kable(regression_table, caption = "Regression Estimates for Anxiety")
+```
+
+```{r}
+model_depression <- lm(Depression ~ Age + Hours.per.day + Instrumentalist + Composer + 
+                       Music.effects, data = cleaned_data)
+summary(model_depression)
+regression_table_depression <- tidy(model_depression)
+knitr::kable(regression_table_depression, caption = "Regression Estimates for Depression")
+```
+
+```{r}
+model_insomnia <- lm(Insomnia ~ Age + Hours.per.day + Instrumentalist + Composer + 
+                     Music.effects, data = cleaned_data)
+summary(model_insomnia)
+regression_table_insomnia <- tidy(model_insomnia)
+knitr::kable(regression_table_insomnia, caption = "Regression Estimates for Insomnia")
+```
+
+```{r}
+model_ocd <- lm(OCD ~ Age + Hours.per.day + Instrumentalist + Composer + 
+                Music.effects, data = cleaned_data)
+summary(model_ocd)
+regression_table_ocd <- tidy(model_ocd)
+knitr::kable(regression_table_ocd, caption = "Regression Estimates for OCD")
+```
+
+```{r}
+regression_table_combined <- bind_rows(
+  tidy(model_anxiety) %>% mutate(Model = "Anxiety"),
+  tidy(model_depression) %>% mutate(Model = "Depression"),
+  tidy(model_insomnia) %>% mutate(Model = "Insomnia"),
+  tidy(model_ocd) %>% mutate(Model = "OCD")
+)
+regression_table_combined <- regression_table_combined %>%
+  select(Model, term, estimate, std.error, statistic, p.value)
+knitr::kable(
+  regression_table_combined,
+  caption = "Combined Regression Estimates for All Mental Health Models",
+  digits = 3
+)
+```
+
+```{r}
+reduced_model_anxiety <- lm(Anxiety ~ Age, data = cleaned_data)
+AIC(model_anxiety, reduced_model_anxiety)
+```
+
+```{r}
+reduced_model_depression <- lm(Depression ~ Age + Hours.per.day, data = cleaned_data)
+AIC(model_depression, reduced_model_depression)
+```
+
+```{r}
+reduced_model_insomnia <- lm(Insomnia ~ Hours.per.day, data = cleaned_data)
+AIC(model_insomnia, reduced_model_insomnia)
+```
+
+```{r}
+reduced_model_ocd <- lm(OCD ~ Age + Hours.per.day, data = cleaned_data)
+AIC(model_ocd, reduced_model_ocd)
+```
+
+```{r}
+shapiro.test(residuals(model_anxiety))
+shapiro.test(residuals(model_depression))
+shapiro.test(residuals(reduced_model_insomnia))
+shapiro.test(residuals(reduced_model_ocd))
+```
+
+```{r}
+model_log1 <- lm(log(Anxiety+1) ~ Age, data = cleaned_data)
+model_log2 <- lm(log(Depression+1) ~ Age + Hours.per.day, data = cleaned_data)
+model_log3 <- lm(log(Insomnia+1) ~ Hours.per.day, data = cleaned_data)
+model_log4 <- lm(log(OCD+1) ~ Age + Hours.per.day, data = cleaned_data)
+```
+
+```{r}
+shapiro.test(residuals(model_log1))
+shapiro.test(residuals(model_log2))
+shapiro.test(residuals(model_log3))
+shapiro.test(residuals(model_log4))
+```
+
+```{r}
+library(lmtest)
+bptest(model_anxiety)
+bptest(model_depression)
+bptest(reduced_model_insomnia)
+bptest(reduced_model_ocd)
+```
+
